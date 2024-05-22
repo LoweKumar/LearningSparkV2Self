@@ -287,6 +287,24 @@ if __name__ == '__main__':
 
     top_scoring_batsmen_per_season.show(30)
 
+    print("top scoring batsmen per season using pyspark")
+    # Join the tables
+    joined_df = ball_by_ball_df.join(match_df, on="match_id")\
+                .join(player_match_df, on=(col("match_id") == player_match_df.match_id) & (col("ball_by_ball_df.striker") == player_match_df.player_id)) \
+
+    joined_df.show(50)
+        # .join(player_df, player_match_df.player_id == player_df.player_id)
+
+    # Calculate total runs per player per season
+    # player_season_runs = joined_df.groupBy(player_df.player_name, match_df.season_year) \
+    #     .agg(sum("ball_by_ball_df.runs_scored").alias("total_runs"))
+    #
+    # # Order by season and total runs (descending)
+    # ordered_player_season_runs = player_season_runs.orderBy(match_df.season_year.asc(), col("total_runs").desc())
+    #
+    # # Display the results
+    # ordered_player_season_runs.show()
+
     economical_bowlers_powerplay = spark.sql("""
     SELECT 
     p.player_name, 
@@ -300,7 +318,7 @@ if __name__ == '__main__':
     HAVING COUNT(*) >= 1
     ORDER BY avg_runs_per_ball, total_wickets DESC
     """)
-    economical_bowlers_powerplay.show()
+    # economical_bowlers_powerplay.show()
 
     toss_impact_individual_matches = spark.sql("""
     SELECT m.match_id, m.toss_winner, m.toss_name, m.match_winner,
@@ -309,7 +327,7 @@ if __name__ == '__main__':
     WHERE m.toss_name IS NOT NULL
     ORDER BY m.match_id
     """)
-    toss_impact_individual_matches.show()
+    # toss_impact_individual_matches.show()
 
     average_runs_in_wins = spark.sql("""
     SELECT p.player_name, AVG(b.runs_scored) AS avg_runs_in_wins, COUNT(*) AS innings_played
@@ -321,7 +339,7 @@ if __name__ == '__main__':
     GROUP BY p.player_name
     ORDER BY avg_runs_in_wins ASC
     """)
-    average_runs_in_wins.show()
+    # average_runs_in_wins.show()
 
 
 
