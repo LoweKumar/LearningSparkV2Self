@@ -221,4 +221,109 @@ if __name__ == '__main__':
     # Display the venue(s)
     venue_of_most_wins.show(200)
 
+    # Filter for dismissals (out_type is not null)
+    filtered_df = ball_by_ball_df.filter(col("out_type").isNotNull())
+
+    # Count occurrences of each dismissal type
+    dismissal_counts = filtered_df.groupBy("out_type") \
+        .agg(count("*").alias("frequency"))
+
+    # Order by frequency (descending)
+    ordered_dismissal_counts = dismissal_counts.orderBy(col("frequency").desc())
+
+    # Display the results
+    print("Most Frequent Dismissal Types")
+    ordered_dismissal_counts.show()
+
+    print("Categorizing players based on batting hand")
+    # Normalize and clean player names
+    player_df = player_df.withColumn("player_name", lower(regexp_replace("player_name", "[^a-zA-Z0-9 ]", "")))
+
+    # Handle missing values in 'batting_hand' and 'bowling_skill' with a default 'unknown'
+    player_df = player_df.na.fill({"batting_hand":"unknown", "bowling_skill":"unknown"})
+
+    # Categorizing players based on batting hand
+    player_df = player_df.withColumn(
+        "batting_style",
+        when(col("batting_hand").contains("left"), "Left-Handed").otherwise("Right-Handed")
+    )
+
+    player_df.show(2)
+
+    # Add a 'veteran_status' column based on player age
+    player_match_df = player_match_df.withColumn(
+        "veteran_status",
+        when(col("age_as_on_match") >= 35, "Veteran").otherwise("Non-Veteran")
+    )
+
+    # Dynamic column to calculate years since debut
+    player_match_df = player_match_df.withColumn(
+        "years_since_debut",
+        (year(current_date()) - col("season_year"))
+    )
+
+    # Show the enriched DataFrame
+    player_match_df.show()
+
+    ball_by_ball_df.createOrReplaceTempView("ball_by_ball")
+    match_df.createOrReplaceTempView("match")
+    player_df.createOrReplaceTempView("player")
+    player_match_df.createOrReplaceTempView("player_match")
+    team_df.createOrReplaceTempView("team")
+
+    print("top scoring batsmen per season")
+    top_scoring_batsmen_per_season = spark.sql("""
+    SELECT 
+    p.player_name,
+    m.season_year,
+    SUM(b.runs_scored) AS total_runs 
+    FROM ball_by_ball b
+    JOIN match m ON b.match_id = m.match_id   
+    JOIN player_match pm ON m.match_id = pm.match_id AND b.striker = pm.player_id     
+    JOIN player p ON p.player_id = pm.player_id
+    GROUP BY p.player_name, m.season_year
+    ORDER BY m.season_year, total_runs DESC
+    """)
+
+    top_scoring_batsmen_per_season.show(30)
+
+    economical_bowlers_powerplay = spark.sql("""
+    SELECT 
+    p.player_name, 
+    AVG(b.runs_scored) AS avg_runs_per_ball, 
+    COUNT(b.bowler_wicket) AS total_wickets
+    FROM ball_by_ball b
+    JOIN player_match pm ON b.match_id = pm.match_id AND b.bowler = pm.player_id
+    JOIN player p ON pm.player_id = p.player_id
+    WHERE b.over_id <= 6
+    GROUP BY p.player_name
+    HAVING COUNT(*) >= 1
+    ORDER BY avg_runs_per_ball, total_wickets DESC
+    """)
+    economical_bowlers_powerplay.show()
+
+    toss_impact_individual_matches = spark.sql("""
+    SELECT m.match_id, m.toss_winner, m.toss_name, m.match_winner,
+           CASE WHEN m.toss_winner = m.match_winner THEN 'Won' ELSE 'Lost' END AS match_outcome
+    FROM match m
+    WHERE m.toss_name IS NOT NULL
+    ORDER BY m.match_id
+    """)
+    toss_impact_individual_matches.show()
+
+    average_runs_in_wins = spark.sql("""
+    SELECT p.player_name, AVG(b.runs_scored) AS avg_runs_in_wins, COUNT(*) AS innings_played
+    FROM ball_by_ball b
+    JOIN player_match pm ON b.match_id = pm.match_id AND b.striker = pm.player_id
+    JOIN player p ON pm.player_id = p.player_id
+    JOIN match m ON pm.match_id = m.match_id
+    WHERE m.match_winner = pm.player_team
+    GROUP BY p.player_name
+    ORDER BY avg_runs_in_wins ASC
+    """)
+    average_runs_in_wins.show()
+
+
+
+
 
